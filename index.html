@@ -30,8 +30,31 @@
       onGround: true,
       width: 18,
       height: 35,
-      legPhase: 0
+      legPhase: 0,
+      ducking: false,
+      runSpeed: 5
     };
+
+    // Arrow key state (so you can hold keys to move)
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ' && gameOver) {
+        e.preventDefault();
+        resetGame();
+        return;
+      }
+      if (keys.hasOwnProperty(e.key)) {
+        e.preventDefault();
+        keys[e.key] = true;
+      }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (keys.hasOwnProperty(e.key)) {
+        e.preventDefault();
+        keys[e.key] = false;
+      }
+    });
 
     // Obstacles: { x, type, width, height, passed }
     const obstacleTypes = [
@@ -47,6 +70,9 @@
     let time = 0;
     let nextObstacleAt = 220;
     const scrollSpeed = 3.2;
+    let gameOver = false;
+
+    const lethalObstacles = ['rock', 'coconut', 'water', 'tiki'];
 
     function spawnObstacle() {
       const t = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
@@ -226,51 +252,99 @@
       const x = runner.x;
       let y = runner.y;
       const phase = runner.legPhase;
-      const bodyH = 22;
+      const ducking = runner.ducking;
+      const bodyH = ducking ? 14 : 22;
       const bodyW = 12;
 
       ctx.save();
       ctx.translate(x, y);
 
-      // legs (running)
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      const legSwing = Math.sin(phase) * 0.5;
-      ctx.moveTo(-3, bodyH / 2);
-      ctx.lineTo(-3 + 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(legSwing));
-      ctx.moveTo(3, bodyH / 2);
-      ctx.lineTo(3 - 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(-legSwing));
-      ctx.stroke();
+      if (ducking) {
+        // crouched: low body, bent legs to the side
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
+        ctx.fillStyle = '#f5d7b2';
+        ctx.beginPath();
+        ctx.arc(0, -bodyH / 2 - 6, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-4, bodyH / 2);
+        ctx.lineTo(-14, bodyH / 2 + 6);
+        ctx.moveTo(4, bodyH / 2);
+        ctx.lineTo(14, bodyH / 2 + 6);
+        ctx.stroke();
+      } else {
+        // legs (running)
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const legSwing = Math.sin(phase) * 0.5;
+        ctx.moveTo(-3, bodyH / 2);
+        ctx.lineTo(-3 + 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(legSwing));
+        ctx.moveTo(3, bodyH / 2);
+        ctx.lineTo(3 - 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(-legSwing));
+        ctx.stroke();
 
-      // body (tank top - Hawaii vibe)
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
+        // body (tank top - Hawaii vibe)
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
 
-      // head
-      ctx.fillStyle = '#f5d7b2';
-      ctx.beginPath();
-      ctx.arc(0, -bodyH / 2 - 8, 7, 0, Math.PI * 2);
-      ctx.fill();
+        // head
+        ctx.fillStyle = '#f5d7b2';
+        ctx.beginPath();
+        ctx.arc(0, -bodyH / 2 - 8, 7, 0, Math.PI * 2);
+        ctx.fill();
 
-      // arms (pumping)
-      ctx.strokeStyle = '#333';
-      ctx.beginPath();
-      ctx.moveTo(-bodyW / 2, -bodyH / 4);
-      ctx.lineTo(-bodyW / 2 - 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
-      ctx.moveTo(bodyW / 2, -bodyH / 4);
-      ctx.lineTo(bodyW / 2 + 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
-      ctx.stroke();
+        // arms (pumping)
+        ctx.strokeStyle = '#333';
+        ctx.beginPath();
+        ctx.moveTo(-bodyW / 2, -bodyH / 4);
+        ctx.lineTo(-bodyW / 2 - 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
+        ctx.moveTo(bodyW / 2, -bodyH / 4);
+        ctx.lineTo(bodyW / 2 + 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
+        ctx.stroke();
+      }
 
       ctx.restore();
     }
 
-    function hitTest(a, b) {
-      return a.x < b.x + b.w && a.x + a.width > b.x &&
-             a.y + a.height > (groundY + b.yOffset - b.h) && a.y < groundY + b.yOffset;
+    function hitTestRunnerObstacle(ob) {
+      const obLeft = ob.x - scrollX;
+      const obRight = obLeft + ob.w;
+      const obTop = groundY + ob.yOffset - ob.h;
+      const obBottom = groundY + ob.yOffset;
+
+      const rH = runner.ducking ? 24 : 35;
+      const rHalfW = runner.width / 2;
+      const rLeft = runner.x - rHalfW;
+      const rRight = runner.x + rHalfW;
+      const rTop = runner.y - rH / 2;
+      const rBottom = runner.y + rH / 2;
+
+      return rRight > obLeft && rLeft < obRight && rBottom > obTop && rTop < obBottom;
+    }
+
+    function resetGame() {
+      gameOver = false;
+      scrollX = 0;
+      obstacles = [];
+      time = 0;
+      nextObstacleAt = 220;
+      runner.x = 80;
+      runner.y = groundY - 35;
+      runner.vy = 0;
+      runner.onGround = true;
+      runner.ducking = false;
+      runner.legPhase = 0;
     }
 
     function update(dt) {
+      if (gameOver) {
+        return;
+      }
+
       time += dt;
       scrollX += scrollSpeed;
 
@@ -280,11 +354,23 @@
         nextObstacleAt = scrollX + 180 + Math.random() * 120;
       }
 
+      // arrow keys: left / right move, up = jump, down = duck
+      const moveSpeed = runner.runSpeed * (dt / 16);
+      if (keys.ArrowLeft)  runner.x = Math.max(50, runner.x - moveSpeed);
+      if (keys.ArrowRight) runner.x = Math.min(W - 50, runner.x + moveSpeed);
+      runner.ducking = keys.ArrowDown;
+
+      if (keys.ArrowUp && runner.onGround) {
+        runner.vy = runner.jumpPower;
+        runner.onGround = false;
+      }
+
       // runner physics
       runner.vy += 0.6;
       runner.y += runner.vy;
-      if (runner.y >= groundY - runner.height) {
-        runner.y = groundY - runner.height;
+      const standHeight = runner.ducking ? 24 : runner.height;
+      if (runner.y >= groundY - standHeight) {
+        runner.y = groundY - standHeight;
         runner.vy = 0;
         runner.onGround = true;
       } else {
@@ -292,17 +378,12 @@
       }
       runner.legPhase += 0.25;
 
-      // jump over obstacles (auto jump when close)
+      // death: hit black spheres (rock, coconut), blue cube (water), or tiki
       obstacles.forEach(ob => {
-        const obScreenX = ob.x - scrollX;
-        if (!ob.passed && obScreenX < runner.x + 50 && obScreenX + ob.w > runner.x - 20) {
-          if (ob.type === 'water' || ob.type === 'rock' || ob.type === 'tiki') {
-            if (runner.onGround && obScreenX < runner.x + 35) {
-              runner.vy = runner.jumpPower;
-              runner.onGround = false;
-            }
-          }
+        if (lethalObstacles.includes(ob.type) && hitTestRunnerObstacle(ob)) {
+          gameOver = true;
         }
+        const obScreenX = ob.x - scrollX;
         if (obScreenX + ob.w < runner.x - 10) ob.passed = true;
       });
 
@@ -333,6 +414,18 @@
 
       obstacles.forEach(drawObstacle);
       drawRunner();
+
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 42px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('You died!', W / 2, H / 2 - 20);
+        ctx.font = '22px sans-serif';
+        ctx.fillText('Press SPACE to restart', W / 2, H / 2 + 25);
+        ctx.textAlign = 'left';
+      }
     }
 
     let last = performance.now();
