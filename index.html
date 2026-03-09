@@ -93,7 +93,27 @@
       transition: transform 0.08s ease-out;
     }
 
-    /* Hide joystick on very small screens if needed? Keep visible by default for phones */
+    /* Portrait-mode layout tweaks for phones */
+    @media (orientation: portrait) {
+      body {
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        overflow-y: auto;
+      }
+
+      canvas {
+        width: 100vw;
+        height: auto;
+        max-height: 60vh;
+      }
+
+      #joystickContainer {
+        left: 50%;
+        bottom: 8vh;
+        transform: translateX(-50%);
+      }
+    }
   </style>
 </head>
 <body>
