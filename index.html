@@ -98,7 +98,22 @@
       bgMusic.volume = 0.5;
       bgMusic.play().catch(function () {});
       if (!blastAudioContext) blastAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (blastAudioContext.state === 'suspended') blastAudioContext.resume();
+      const ctx = blastAudioContext;
+      function primeBlastContext() {
+        try {
+          var buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+          buf.getChannelData(0)[0] = 0;
+          var src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.start(0);
+        } catch (e) {}
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(primeBlastContext).catch(function () {});
+      } else {
+        primeBlastContext();
+      }
     }
 
     let blastAudioContext = null;
