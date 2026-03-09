@@ -54,6 +54,46 @@
     #saveScoreButton:hover {
       background: #ffc66b;
     }
+
+    /* Mobile joystick controls */
+    #joystickContainer {
+      position: absolute;
+      left: 16px;
+      bottom: 20px;
+      width: 130px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: auto;
+    }
+    #joystickBase {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), rgba(0,0,0,0.45));
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+      opacity: 0.85;
+      position: relative;
+    }
+    #joystickKnob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ffffff, #e3e3e3);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+      transition: transform 0.08s ease-out;
+    }
+
+    /* Hide joystick on very small screens if needed? Keep visible by default for phones */
   </style>
 </head>
 <body>
@@ -71,6 +111,11 @@
       </div>
     </div>
   </div>
+  <div id="joystickContainer">
+    <div id="joystickBase">
+      <div id="joystickKnob"></div>
+    </div>
+  </div>
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
@@ -84,6 +129,11 @@
     const namePromptScoreText = document.getElementById('namePromptScoreText');
     const playerNameInput = document.getElementById('playerNameInput');
     const saveScoreButton = document.getElementById('saveScoreButton');
+
+    // Joystick elements (for touch / phone)
+    const joystickContainer = document.getElementById('joystickContainer');
+    const joystickBase = document.getElementById('joystickBase');
+    const joystickKnob = document.getElementById('joystickKnob');
 
     // Ground level (sand)
     const groundY = H - 55;
@@ -169,6 +219,96 @@
     } catch (e) {
       // ignore storage errors
     }
+
+    // --- Touch joystick handling (maps to Arrow keys) ---
+    let joystickActive = false;
+
+    function resetJoystickKnob() {
+      joystickKnob.style.transform = 'translate(0px, 0px)';
+    }
+
+    function updateJoystickFromTouch(touch) {
+      if (!touch) return;
+      const rect = joystickBase.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = touch.clientX - cx;
+      const dy = touch.clientY - cy;
+
+      // deadzone & max distance
+      const maxDist = rect.width * 0.4;
+      const dead = rect.width * 0.12;
+
+      // set knob visual position
+      const dist = Math.min(maxDist, Math.hypot(dx, dy));
+      let knobX = 0;
+      let knobY = 0;
+      if (dist > 0) {
+        const angle = Math.atan2(dy, dx);
+        knobX = Math.cos(angle) * dist;
+        knobY = Math.sin(angle) * dist;
+      }
+      joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+
+      // clear all directions first
+      keys.ArrowLeft = false;
+      keys.ArrowRight = false;
+      keys.ArrowUp = false;
+      keys.ArrowDown = false;
+
+      if (dist < dead) {
+        return;
+      }
+
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+
+      if (ax >= ay) {
+        // horizontal dominance: left / right
+        if (dx < 0) {
+          keys.ArrowLeft = true;
+        } else {
+          keys.ArrowRight = true;
+        }
+      } else {
+        // vertical dominance: up (jump) / down (duck)
+        if (dy < 0) {
+          keys.ArrowUp = true;
+        } else {
+          keys.ArrowDown = true;
+        }
+      }
+    }
+
+    function handleJoystickStart(e) {
+      joystickActive = true;
+      const touch = e.touches ? e.touches[0] : e;
+      updateJoystickFromTouch(touch);
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function handleJoystickMove(e) {
+      if (!joystickActive) return;
+      const touch = e.touches ? e.touches[0] : e;
+      updateJoystickFromTouch(touch);
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function handleJoystickEnd(e) {
+      joystickActive = false;
+      keys.ArrowLeft = false;
+      keys.ArrowRight = false;
+      keys.ArrowUp = false;
+      keys.ArrowDown = false;
+      resetJoystickKnob();
+      if (e && e.cancelable) e.preventDefault();
+    }
+
+    // Touch events for phones / tablets
+    joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
+    joystickBase.addEventListener('touchmove', handleJoystickMove, { passive: false });
+    joystickBase.addEventListener('touchend', handleJoystickEnd, { passive: false });
+    joystickBase.addEventListener('touchcancel', handleJoystickEnd, { passive: false });
 
     function saveScoreAndRestart() {
       const name = (playerNameInput.value || '').trim() || 'Anonymous';
