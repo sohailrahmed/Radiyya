@@ -105,36 +105,40 @@
     function playBlastSound() {
       try {
         if (!blastAudioContext) blastAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (blastAudioContext.state === 'suspended') blastAudioContext.resume();
         const ctx = blastAudioContext;
-        const t0 = ctx.currentTime;
-        const dur = 0.18;
-
-        const osc = ctx.createOscillator();
-        const oscGain = ctx.createGain();
-        osc.connect(oscGain);
-        oscGain.connect(ctx.destination);
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(520, t0);
-        osc.frequency.exponentialRampToValueAtTime(180, t0 + 0.1);
-        oscGain.gain.setValueAtTime(0.65, t0);
-        oscGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
-        osc.start(t0);
-        osc.stop(t0 + dur);
-
-        const bufSize = ctx.sampleRate * dur;
-        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-        const channel = buf.getChannelData(0);
-        for (let i = 0; i < bufSize; i++) channel[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.04));
-        const noise = ctx.createBufferSource();
-        noise.buffer = buf;
-        const noiseGain = ctx.createGain();
-        noise.connect(noiseGain);
-        noiseGain.connect(ctx.destination);
-        noiseGain.gain.setValueAtTime(0.4, t0);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
-        noise.start(t0);
-        noise.stop(t0 + dur);
+        function doPlayBlast() {
+          const t0 = ctx.currentTime;
+          const dur = 0.18;
+          const osc = ctx.createOscillator();
+          const oscGain = ctx.createGain();
+          osc.connect(oscGain);
+          oscGain.connect(ctx.destination);
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(520, t0);
+          osc.frequency.exponentialRampToValueAtTime(180, t0 + 0.1);
+          oscGain.gain.setValueAtTime(0.65, t0);
+          oscGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
+          osc.start(t0);
+          osc.stop(t0 + dur);
+          const bufSize = ctx.sampleRate * dur;
+          const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+          const channel = buf.getChannelData(0);
+          for (let i = 0; i < bufSize; i++) channel[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.04));
+          const noise = ctx.createBufferSource();
+          noise.buffer = buf;
+          const noiseGain = ctx.createGain();
+          noise.connect(noiseGain);
+          noiseGain.connect(ctx.destination);
+          noiseGain.gain.setValueAtTime(0.4, t0);
+          noiseGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
+          noise.start(t0);
+          noise.stop(t0 + dur);
+        }
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(doPlayBlast).catch(function () {});
+        } else {
+          doPlayBlast();
+        }
       } catch (e) {}
     }
 
