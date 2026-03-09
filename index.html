@@ -79,10 +79,6 @@
     <source src="music.mp3" type="audio/mpeg">
     <source src="music.ogg" type="audio/ogg">
   </audio>
-  <audio id="blastSound">
-    <source src="blast.mp3" type="audio/mpeg">
-    <source src="blast.ogg" type="audio/ogg">
-  </audio>
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
@@ -101,13 +97,45 @@
       musicStarted = true;
       bgMusic.volume = 0.5;
       bgMusic.play().catch(function () {});
+      if (!blastAudioContext) blastAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (blastAudioContext.state === 'suspended') blastAudioContext.resume();
     }
 
-    const blastSound = document.getElementById('blastSound');
+    let blastAudioContext = null;
     function playBlastSound() {
-      blastSound.currentTime = 0;
-      blastSound.volume = 0.6;
-      blastSound.play().catch(function () {});
+      try {
+        if (!blastAudioContext) blastAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (blastAudioContext.state === 'suspended') blastAudioContext.resume();
+        const ctx = blastAudioContext;
+        const t0 = ctx.currentTime;
+        const dur = 0.18;
+
+        const osc = ctx.createOscillator();
+        const oscGain = ctx.createGain();
+        osc.connect(oscGain);
+        oscGain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(520, t0);
+        osc.frequency.exponentialRampToValueAtTime(180, t0 + 0.1);
+        oscGain.gain.setValueAtTime(0.65, t0);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
+        osc.start(t0);
+        osc.stop(t0 + dur);
+
+        const bufSize = ctx.sampleRate * dur;
+        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const channel = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) channel[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.04));
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const noiseGain = ctx.createGain();
+        noise.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noiseGain.gain.setValueAtTime(0.4, t0);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
+        noise.start(t0);
+        noise.stop(t0 + dur);
+      } catch (e) {}
     }
 
     // Ground level (sand)
@@ -660,31 +688,45 @@
       }
 
       if (ducking) {
-        // crouched: low body, bent legs to the side
+        // crouched: low body, bent legs to the side (filled legs)
         ctx.fillStyle = '#e74c3c';
         ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
         ctx.fillStyle = '#f5d7b2';
         ctx.beginPath();
         ctx.arc(0, -bodyH / 2 - 6, 6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
+        ctx.fillStyle = '#2c5282';
+        ctx.fillRect(-12, bodyH / 2 + 2, 10, 5);
+        ctx.fillRect(2, bodyH / 2 + 2, 10, 5);
+        ctx.strokeStyle = '#1a365d';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-12, bodyH / 2 + 2, 10, 5);
+        ctx.strokeRect(2, bodyH / 2 + 2, 10, 5);
+      } else if (runner.onGround) {
+        // running on ground: visible legs (thigh + calf), then body, then arms
+        const legSwing = Math.sin(phase) * 0.5;
+        const lKneeX = -3 + 10 * Math.sin(legSwing);
+        const lKneeY = bodyH / 2 + 10 * Math.cos(legSwing);
+        const rKneeX = 3 - 10 * Math.sin(legSwing);
+        const rKneeY = bodyH / 2 + 10 * Math.cos(-legSwing);
+        ctx.fillStyle = '#2c5282';
+        ctx.strokeStyle = '#1a365d';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(-4, bodyH / 2);
-        ctx.lineTo(-14, bodyH / 2 + 6);
-        ctx.moveTo(4, bodyH / 2);
-        ctx.lineTo(14, bodyH / 2 + 6);
+        ctx.lineTo(lKneeX - 2, lKneeY);
+        ctx.lineTo(lKneeX - 1, lKneeY + 14);
+        ctx.lineTo(-2, bodyH / 2 + 16);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
-      } else if (runner.onGround) {
-        // running on ground: legs and body, arms pump
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
         ctx.beginPath();
-        const legSwing = Math.sin(phase) * 0.5;
-        ctx.moveTo(-3, bodyH / 2);
-        ctx.lineTo(-3 + 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(legSwing));
-        ctx.moveTo(3, bodyH / 2);
-        ctx.lineTo(3 - 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(-legSwing));
+        ctx.moveTo(4, bodyH / 2);
+        ctx.lineTo(rKneeX + 2, rKneeY);
+        ctx.lineTo(rKneeX + 1, rKneeY + 14);
+        ctx.lineTo(2, bodyH / 2 + 16);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#e74c3c';
@@ -696,6 +738,7 @@
         ctx.fill();
 
         ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(-bodyW / 2, -bodyH / 4);
         ctx.lineTo(-bodyW / 2 - 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
@@ -703,7 +746,7 @@
         ctx.lineTo(bodyW / 2 + 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
         ctx.stroke();
       } else {
-        // in the air: slightly horizontal Superman pose, arms outstretched
+        // in the air: Superman pose with legs trailing (simple filled legs)
         ctx.rotate(0.38);
         ctx.fillStyle = '#e74c3c';
         ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
@@ -719,6 +762,9 @@
         ctx.moveTo(bodyW / 2, -bodyH / 4);
         ctx.lineTo(bodyW / 2 + 18, -bodyH / 4 - 4);
         ctx.stroke();
+        ctx.fillStyle = '#2c5282';
+        ctx.fillRect(-5, bodyH / 2 - 2, 4, 14);
+        ctx.fillRect(1, bodyH / 2 - 2, 4, 14);
       }
 
       ctx.restore();
