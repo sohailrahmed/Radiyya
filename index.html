@@ -467,6 +467,23 @@
       ctx.save();
       ctx.translate(x, y);
 
+      // yellow cape that opens and flutters while in the air
+      if (!runner.onGround) {
+        const flutter = Math.sin(time * 0.35) * 6;
+        ctx.fillStyle = '#ffd84a';
+        ctx.beginPath();
+        ctx.moveTo(-bodyW / 2, -bodyH / 2); // attach near left shoulder
+        ctx.quadraticCurveTo(
+          -bodyW / 2 - 20,
+          -bodyH / 2 + 10 + flutter,
+          -bodyW / 2 - 28,
+          bodyH / 2 + 14
+        );
+        ctx.lineTo(-bodyW / 2, bodyH / 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
       if (ducking) {
         // crouched: low body, bent legs to the side
         ctx.fillStyle = '#e74c3c';
