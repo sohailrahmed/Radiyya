@@ -209,18 +209,16 @@
         return;
       }
 
-      const ax = Math.abs(dx);
-      const ay = Math.abs(dy);
-
-      if (ax >= ay) {
-        // horizontal dominance: left / right
+      // 360° directional support: allow horizontal and vertical at the same time.
+      // Make horizontal almost as sensitive as vertical by using the same threshold.
+      if (Math.abs(dx) > dead * 0.9) {
         if (dx < 0) {
           keys.ArrowLeft = true;
         } else {
           keys.ArrowRight = true;
         }
-      } else {
-        // vertical dominance: up (jump) / down (duck)
+      }
+      if (Math.abs(dy) > dead) {
         if (dy < 0) {
           keys.ArrowUp = true;
         } else {
