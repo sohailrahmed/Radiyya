@@ -150,10 +150,14 @@
     let scrollX = 0;
     let time = 0;
     let nextObstacleAt = 220;
+    let nextMeteorAt = 350;
     const scrollSpeed = 3.2;
+    const meteorSpeed = scrollSpeed + 6;
     let gameOver = false;
     let score = 0;
     let highScore = 0;
+    let meteors = [];
+    let blasts = [];
 
     const lethalObstacles = ['rock', 'coconut', 'water', 'tiki', 'chips'];
 
@@ -268,6 +272,75 @@
         passed: false,
         counted: false
       });
+    }
+
+    function spawnMeteor() {
+      const topHalfMax = Math.floor(H / 2) - 60;
+      meteors.push({
+        x: scrollX + W + 80,
+        y: 40 + Math.random() * topHalfMax,
+        r: 12,
+        tailLen: 42
+      });
+    }
+
+    function hitTestRunnerMeteor(m) {
+      const sx = m.x - scrollX;
+      const rH = runner.ducking ? 24 : 35;
+      const rHalfW = runner.width / 2;
+      const rLeft = runner.x - rHalfW;
+      const rRight = runner.x + rHalfW;
+      const rTop = runner.y - rH / 2;
+      const rBottom = runner.y + rH / 2;
+      const cx = sx;
+      const cy = m.y;
+      const closestX = Math.max(rLeft, Math.min(cx, rRight));
+      const closestY = Math.max(rTop, Math.min(cy, rBottom));
+      const distSq = (cx - closestX) ** 2 + (cy - closestY) ** 2;
+      return distSq <= m.r * m.r;
+    }
+
+    function drawMeteor(m) {
+      const sx = m.x - scrollX;
+      if (sx + m.tailLen + m.r < -20 || sx - m.r > W + 20) return;
+      const tailSegments = 8;
+      for (let i = tailSegments; i >= 0; i--) {
+        const t = i / tailSegments;
+        const x = sx + t * m.tailLen;
+        const rad = m.r * (0.3 + 0.7 * (1 - t));
+        const g = ctx.createRadialGradient(x, m.y, 0, x, m.y, rad);
+        g.addColorStop(0, i === 0 ? '#fff' : `rgba(255,${120 + 135 * (1 - t)},0,0.95)`);
+        g.addColorStop(0.5, `rgba(255,${80 + 100 * (1 - t)},0,0.6)`);
+        g.addColorStop(1, 'rgba(200,40,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, m.y, rad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(sx, m.y, m.r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawBlast(b) {
+      const sx = b.x - scrollX;
+      if (sx < -60 || sx > W + 60) return;
+      const age = time - b.t0;
+      const dur = 0.5;
+      if (age >= dur) return;
+      const t = age / dur;
+      const radius = 15 + 45 * t;
+      const alpha = 1 - t;
+      const g = ctx.createRadialGradient(sx, b.y, 0, sx, b.y, radius);
+      g.addColorStop(0, `rgba(255,255,200,${0.9 * alpha})`);
+      g.addColorStop(0.3, `rgba(255,180,0,${0.7 * alpha})`);
+      g.addColorStop(0.7, `rgba(255,80,0,${0.4 * alpha})`);
+      g.addColorStop(1, 'rgba(200,20,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(sx, b.y, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     function drawSky() {
@@ -462,10 +535,13 @@
       const bodyH = ducking ? 14 : 22;
       const bodyW = 12;
 
-      ctx.save();
-      ctx.translate(x, y);
+      // on ground: subtle up-down bobbing
+      const bobbing = runner.onGround && !ducking ? Math.sin(phase) * 2.5 : 0;
 
-      // yellow cape that opens and flutters while in the air
+      ctx.save();
+      ctx.translate(x, y + bobbing);
+
+      // yellow cape in the air; on left when moving right, on right when moving left
       if (!runner.onGround) {
         const glidingHorizontally =
           ((keys.ArrowLeft && !keys.ArrowRight) || (keys.ArrowRight && !keys.ArrowLeft)) &&
@@ -473,17 +549,31 @@
         const flutterSpeed = glidingHorizontally ? 1.6 : 0.35;
         const flutterAmp = glidingHorizontally ? 4 : 6;
         const flutter = Math.sin(time * flutterSpeed) * flutterAmp;
+        const movingLeft = keys.ArrowLeft && !keys.ArrowRight;
 
         ctx.fillStyle = '#ffd84a';
         ctx.beginPath();
-        ctx.moveTo(-bodyW / 2, -bodyH / 2 - (glidingHorizontally ? 2 : 0)); // attach near left shoulder
-        ctx.quadraticCurveTo(
-          -bodyW / 2 - 20,
-          -bodyH / 2 + 10 + flutter,
-          -bodyW / 2 - 28,
-          bodyH / 2 + 14
-        );
-        ctx.lineTo(-bodyW / 2, bodyH / 2);
+        if (movingLeft) {
+          // cape on right side when moving left
+          ctx.moveTo(bodyW / 2, -bodyH / 2 - (glidingHorizontally ? 2 : 0));
+          ctx.quadraticCurveTo(
+            bodyW / 2 + 20,
+            -bodyH / 2 + 10 + flutter,
+            bodyW / 2 + 28,
+            bodyH / 2 + 14
+          );
+          ctx.lineTo(bodyW / 2, bodyH / 2);
+        } else {
+          // cape on left side when moving right or neutral
+          ctx.moveTo(-bodyW / 2, -bodyH / 2 - (glidingHorizontally ? 2 : 0));
+          ctx.quadraticCurveTo(
+            -bodyW / 2 - 20,
+            -bodyH / 2 + 10 + flutter,
+            -bodyW / 2 - 28,
+            bodyH / 2 + 14
+          );
+          ctx.lineTo(-bodyW / 2, bodyH / 2);
+        }
         ctx.closePath();
         ctx.fill();
       }
@@ -504,8 +594,8 @@
         ctx.moveTo(4, bodyH / 2);
         ctx.lineTo(14, bodyH / 2 + 6);
         ctx.stroke();
-      } else {
-        // legs (running)
+      } else if (runner.onGround) {
+        // running on ground: legs and body, arms pump
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -516,23 +606,37 @@
         ctx.lineTo(3 - 10 * Math.sin(legSwing), bodyH / 2 + 12 * Math.cos(-legSwing));
         ctx.stroke();
 
-        // body (tank top - Hawaii vibe)
         ctx.fillStyle = '#e74c3c';
         ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
 
-        // head
         ctx.fillStyle = '#f5d7b2';
         ctx.beginPath();
         ctx.arc(0, -bodyH / 2 - 8, 7, 0, Math.PI * 2);
         ctx.fill();
 
-        // arms (pumping)
         ctx.strokeStyle = '#333';
         ctx.beginPath();
         ctx.moveTo(-bodyW / 2, -bodyH / 4);
         ctx.lineTo(-bodyW / 2 - 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
         ctx.moveTo(bodyW / 2, -bodyH / 4);
         ctx.lineTo(bodyW / 2 + 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
+        ctx.stroke();
+      } else {
+        // in the air: slightly horizontal Superman pose, arms outstretched
+        ctx.rotate(0.38);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
+        ctx.fillStyle = '#f5d7b2';
+        ctx.beginPath();
+        ctx.arc(0, -bodyH / 2 - 8, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-bodyW / 2, -bodyH / 4);
+        ctx.lineTo(-bodyW / 2 - 18, -bodyH / 4 - 4);
+        ctx.moveTo(bodyW / 2, -bodyH / 4);
+        ctx.lineTo(bodyW / 2 + 18, -bodyH / 4 - 4);
         ctx.stroke();
       }
 
@@ -559,8 +663,11 @@
       gameOver = false;
       scrollX = 0;
       obstacles = [];
+      meteors = [];
+      blasts = [];
       time = 0;
       nextObstacleAt = 220;
+      nextMeteorAt = 350;
       score = 0;
       runner.x = 80;
       runner.y = groundY - 35;
@@ -583,6 +690,27 @@
         spawnObstacle();
         nextObstacleAt = scrollX + 180 + Math.random() * 120;
       }
+
+      // spawn meteors (top half of screen only, right to left, multiple levels)
+      if (scrollX >= nextMeteorAt) {
+        spawnMeteor();
+        spawnMeteor();
+        spawnMeteor();
+        nextMeteorAt = scrollX + 90 + Math.random() * 80;
+      }
+      meteors.forEach(m => { m.x -= meteorSpeed * dt; });
+
+      // meteor vs runner: contact = blast, +5 points, meteor removed
+      meteors = meteors.filter(m => {
+        if (hitTestRunnerMeteor(m)) {
+          blasts.push({ x: m.x, y: m.y, t0: time });
+          score += 5;
+          return false;
+        }
+        return true;
+      });
+      meteors = meteors.filter(m => m.x - scrollX + m.tailLen + m.r > -40);
+      blasts = blasts.filter(b => time - b.t0 < 0.5);
 
       // arrow keys: left / right move, up = jump, down = duck
       const baseMoveSpeed = runner.runSpeed * (dt / 16);
@@ -671,7 +799,9 @@
       });
 
       obstacles.forEach(drawObstacle);
+      meteors.forEach(drawMeteor);
       drawRunner();
+      blasts.forEach(drawBlast);
 
       // HUD: score and high score
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
