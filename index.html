@@ -242,7 +242,10 @@
       height: 45,
       legPhase: 0,
       ducking: false,
-      runSpeed: 5
+      runSpeed: 5,
+      fallingInHole: false,
+      fallStartTime: 0,
+      fallHoleCenterWorldX: 0
     };
 
     // Arrow key state (so you can hold keys to move)
@@ -276,14 +279,11 @@
       }
     });
 
-    // Obstacles: { x, type, width, height, passed, counted }
+    // Obstacles: holes in the ground { x, type, width, height (depth), passed, counted }
     const obstacleTypes = [
-      { type: 'rock', w: 28, h: 44, yOffset: 0 },
-      { type: 'coconut', w: 20, h: 40, yOffset: -5 },
-      { type: 'water', w: 45, h: 50, yOffset: 0 },
-      { type: 'tiki', w: 18, h: 80, yOffset: 0 },
-      { type: 'flower', w: 35, h: 50, yOffset: 0 },
-      { type: 'chips', w: 26, h: 60, yOffset: -4 }
+      { type: 'hole', w: 72, h: 55, yOffset: 0 },
+      { type: 'hole', w: 88, h: 65, yOffset: 0 },
+      { type: 'hole', w: 104, h: 75, yOffset: 0 }
     ];
 
     let obstacles = [];
@@ -301,7 +301,7 @@
     let nextJetAt = 380;
     const jetSpeed = scrollSpeed + 4;
 
-    const lethalObstacles = ['rock', 'coconut', 'water', 'tiki', 'chips'];
+    const lethalObstacles = ['hole'];
 
     // Load saved high score if present
     try {
@@ -645,94 +645,42 @@
       if (x + ob.w < -20 || x > W + 20) return;
       const y = groundY + ob.yOffset;
 
-      switch (ob.type) {
-        case 'rock':
-          ctx.fillStyle = '#4a4a4a';
-          ctx.beginPath();
-          ctx.ellipse(x + ob.w / 2, y - ob.h / 2, ob.w / 2, ob.h / 2, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#2a2a2a';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          break;
-        case 'coconut':
-          ctx.fillStyle = '#3d2817';
-          ctx.beginPath();
-          ctx.arc(x + ob.w / 2, y - ob.h / 2, ob.w / 2 - 2, 0, Math.PI * 2);
-          ctx.fill();
-          break;
-        case 'water':
-          ctx.fillStyle = 'rgba(30, 144, 255, 0.6)';
-          ctx.strokeStyle = 'rgba(30, 144, 255, 0.9)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.roundRect(x, y - ob.h, ob.w, ob.h, 4);
-          ctx.fill();
-          ctx.stroke();
-          break;
-        case 'tiki':
-          ctx.fillStyle = '#8b4513';
-          ctx.fillRect(x + 2, y - ob.h, 14, ob.h);
-          ctx.fillStyle = '#654321';
-          ctx.beginPath();
-          ctx.arc(x + 9, y - ob.h - 12, 10, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.fillText('😠', x + 5, y - ob.h - 8);
-          break;
-        case 'chips':
-          // bright snack bag
-          ctx.save();
-          ctx.translate(x + ob.w / 2, y - ob.h / 2);
-          ctx.rotate(Math.sin(time * 0.15 + x * 0.02) * 0.15);
-          ctx.fillStyle = '#ffcc33';
-          ctx.beginPath();
-          ctx.moveTo(-ob.w / 2, ob.h / 2);
-          ctx.lineTo(-ob.w / 2 + 4, -ob.h / 2);
-          ctx.lineTo(ob.w / 2 - 4, -ob.h / 2);
-          ctx.lineTo(ob.w / 2, ob.h / 2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = '#e67e22';
-          ctx.fillRect(-ob.w / 2 + 3, -2, ob.w - 6, 4);
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('CH', 0, -6);
-          ctx.restore();
-          break;
-        case 'flower':
-          ctx.fillStyle = '#ff69b4';
-          ctx.beginPath();
-          for (let i = 0; i < 5; i++) {
-            const a = (i / 5) * Math.PI * 2 + time * 0.05;
-            const px = x + ob.w / 2 + Math.cos(a) * 12;
-            const py = y - ob.h / 2 + Math.sin(a) * 8;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = '#ffd700';
-          ctx.beginPath();
-          ctx.arc(x + ob.w / 2, y - ob.h / 2, 4, 0, Math.PI * 2);
-          ctx.fill();
-          break;
+      if (ob.type === 'hole') {
+        // Flat pancake-like black spot (manhole cover style) on the ground
+        const cx = x + ob.w / 2;
+        const flatHeight = 10; // thin vertical so it reads as flat on the ground
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath();
+        ctx.ellipse(cx, y + flatHeight / 2, ob.w / 2, flatHeight / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
     }
 
     function drawRunner() {
+      // Don't draw runner after he's fully fallen (game over will show)
+      if (gameOver && !runner.fallingInHole) return;
+
       const x = runner.x;
       let y = runner.y;
       const phase = runner.legPhase;
+
+      // When sinking in hole: clip to above ground so body disappears from feet up
+      if (runner.fallingInHole) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, W, groundY + 2);
+        ctx.clip();
+      }
+
       const ducking = runner.ducking;
       const bodyH = ducking ? 14 : 22;
       const bodyW = 12;
 
-      // on ground: subtle up-down bobbing
-      const bobbing = runner.onGround && !ducking ? Math.sin(phase) * 2.5 : 0;
+      // on ground: subtle walk bobbing (slower, smaller); no bobbing when sinking
+      const bobbing = (runner.onGround && !ducking && !runner.fallingInHole) ? Math.sin(phase * 0.8) * 1.5 : 0;
 
       ctx.save();
       ctx.translate(x, y + bobbing);
@@ -824,13 +772,16 @@
         ctx.arc(0, -bodyH / 2 - 8, 7, 0, Math.PI * 2);
         ctx.fill();
 
+        // Arms down at sides, natural walk swing (hands hang below shoulder, slight forward/back)
+        const armHang = 16;
+        const armSwing = 4;
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(-bodyW / 2, -bodyH / 4);
-        ctx.lineTo(-bodyW / 2 - 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
+        ctx.lineTo(-bodyW / 2 - armSwing * Math.sin(phase), -bodyH / 4 + armHang);
         ctx.moveTo(bodyW / 2, -bodyH / 4);
-        ctx.lineTo(bodyW / 2 + 8 * Math.sin(-phase * 1.2), -bodyH / 4 - 10);
+        ctx.lineTo(bodyW / 2 + armSwing * Math.sin(phase), -bodyH / 4 + armHang);
         ctx.stroke();
       } else {
         // in the air: Superman pose with legs trailing (simple filled legs)
@@ -855,20 +806,25 @@
       }
 
       ctx.restore();
+      if (runner.fallingInHole) {
+        ctx.restore(); // pop clip
+      }
     }
 
     function hitTestRunnerObstacle(ob) {
       const obLeft = ob.x - scrollX;
       const obRight = obLeft + ob.w;
-      const obTop = groundY + ob.yOffset - ob.h;
-      const obBottom = groundY + ob.yOffset;
+      // Holes are flat on the ground: thin band at groundY so runner feet can touch
+      const obTop = ob.type === 'hole' ? groundY : groundY + ob.yOffset - ob.h;
+      const obBottom = ob.type === 'hole' ? groundY + 14 : groundY + ob.yOffset;
 
       const rH = runner.ducking ? 24 : 35;
       const rHalfW = runner.width / 2;
       const rLeft = runner.x - rHalfW;
       const rRight = runner.x + rHalfW;
       const rTop = runner.y - rH / 2;
-      const rBottom = runner.y + rH / 2;
+      // When on ground, treat runner's feet as at groundY so he can touch flat holes
+      const rBottom = (ob.type === 'hole' && runner.onGround) ? groundY + 2 : runner.y + rH / 2;
 
       return rRight > obLeft && rLeft < obRight && rBottom > obTop && rTop < obBottom;
     }
@@ -891,6 +847,9 @@
       runner.onGround = true;
       runner.ducking = false;
       runner.legPhase = 0;
+      runner.fallingInHole = false;
+      runner.fallStartTime = 0;
+      runner.fallHoleCenterWorldX = 0;
     }
 
     function update(dt) {
@@ -899,12 +858,14 @@
       }
 
       time += dt;
-      scrollX += scrollSpeed;
+      if (!runner.fallingInHole) {
+        scrollX += scrollSpeed;
+      }
 
-      // spawn obstacles
+      // spawn obstacles (holes at half frequency)
       if (scrollX >= nextObstacleAt) {
         spawnObstacle();
-        nextObstacleAt = scrollX + 180 + Math.random() * 120;
+        nextObstacleAt = scrollX + 720 + Math.random() * 480;
       }
 
       // spawn meteors (top half of screen only, right to left, multiple levels)
@@ -949,26 +910,28 @@
       });
       jets = jets.filter(j => j.x - scrollX + j.w > -50);
 
-      // arrow keys: left / right move, up = jump, down = duck
-      const baseMoveSpeed = runner.runSpeed * (dt / 16);
-      const airMultiplier = runner.onGround ? 1 : 10; // much more horizontal movement in the air
-      const moveSpeed = baseMoveSpeed * airMultiplier;
-      if (keys.ArrowLeft)  runner.x = Math.max(50, runner.x - moveSpeed);
-      if (keys.ArrowRight) runner.x = Math.min(W - 50, runner.x + moveSpeed);
-      runner.ducking = keys.ArrowDown;
+      // arrow keys: left / right move, up = jump, down = duck (skip when falling in hole)
+      if (!runner.fallingInHole) {
+        const baseMoveSpeed = runner.runSpeed * (dt / 16);
+        const airMultiplier = runner.onGround ? 1 : 10; // much more horizontal movement in the air
+        const moveSpeed = baseMoveSpeed * airMultiplier;
+        if (keys.ArrowLeft)  runner.x = Math.max(50, runner.x - moveSpeed);
+        if (keys.ArrowRight) runner.x = Math.min(W - 50, runner.x + moveSpeed);
+        runner.ducking = keys.ArrowDown;
 
-      if (keys.ArrowUp && runner.onGround) {
-        runner.vy = runner.jumpPower;
-        runner.onGround = false;
+        if (keys.ArrowUp && runner.onGround) {
+          runner.vy = runner.jumpPower;
+          runner.onGround = false;
+        }
+
+        // runner physics: half fall speed when moving horizontally in the air
+        const glidingHorizontally =
+          !runner.onGround &&
+          ((keys.ArrowLeft && !keys.ArrowRight) || (keys.ArrowRight && !keys.ArrowLeft));
+        const gravity = glidingHorizontally ? 0.15 : 0.6;
+        runner.vy += gravity;
+        runner.y += runner.vy;
       }
-
-      // runner physics: half fall speed when moving horizontally in the air
-      const glidingHorizontally =
-        !runner.onGround &&
-        ((keys.ArrowLeft && !keys.ArrowRight) || (keys.ArrowRight && !keys.ArrowLeft));
-      const gravity = glidingHorizontally ? 0.15 : 0.6;
-      runner.vy += gravity;
-      runner.y += runner.vy;
 
       const standHeight = runner.ducking ? 24 : runner.height;
       // ceiling: don't fly off the top of the screen
@@ -976,19 +939,36 @@
         runner.y = ceilingMargin;
         runner.vy = 0;
       }
-      if (runner.y >= groundY - standHeight) {
-        runner.y = groundY - standHeight;
-        runner.vy = 0;
-        runner.onGround = true;
-      } else {
-        runner.onGround = false;
+      if (!runner.fallingInHole) {
+        if (runner.y >= groundY - standHeight) {
+          runner.y = groundY - standHeight;
+          runner.vy = 0;
+          runner.onGround = true;
+        } else {
+          runner.onGround = false;
+        }
+        runner.legPhase += 0.25;
       }
-      runner.legPhase += 0.25;
 
-      // death: hit lethal obstacles
+      // falling into hole: faster sink into the hole they touched
+      if (runner.fallingInHole) {
+        runner.y += 10 * (dt / 16);
+        // Pull character toward hole center so they sink into that hole
+        const holeScreenX = runner.fallHoleCenterWorldX - scrollX;
+        runner.x += (holeScreenX - runner.x) * 0.25;
+      }
+
+      // death: hit holes — fall in until fully submerged, then game over
       obstacles.forEach(ob => {
-        if (lethalObstacles.includes(ob.type) && hitTestRunnerObstacle(ob)) {
+        if (lethalObstacles.includes(ob.type) && hitTestRunnerObstacle(ob) && !runner.fallingInHole) {
+          runner.fallingInHole = true;
+          runner.fallStartTime = time;
+          runner.fallHoleCenterWorldX = ob.x + ob.w / 2;
+        }
+        // Game over when character has fully sunk into the hole (head below ground)
+        if (runner.fallingInHole && runner.y >= groundY + 28) {
           gameOver = true;
+          runner.fallingInHole = false;
           if (score > highScore) {
             highScore = score;
             try {
