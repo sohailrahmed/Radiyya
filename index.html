@@ -984,7 +984,7 @@
       // arrow keys: left / right move, up = jump, down = duck (skip when falling in hole)
       if (!runner.fallingInHole) {
         const baseMoveSpeed = runner.runSpeed * (dt / 16);
-        const airMultiplier = runner.onGround ? 1 : 10; // much more horizontal movement in the air
+        const airMultiplier = runner.onGround ? 1 : 5; // moderate horizontal movement in the air (was 10)
         const moveSpeed = baseMoveSpeed * airMultiplier;
         if (keys.ArrowLeft)  runner.x = Math.max(50, runner.x - moveSpeed);
         if (keys.ArrowRight) runner.x = Math.min(W - 50, runner.x + moveSpeed);
