@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Hawaii Obstacle Course</title>
   <style>
     body { margin: 0; background: #1a5f7a; display: flex; justify-content: center; align-items: center; min-height: 100vh; position: relative; overflow: hidden; }
@@ -288,6 +291,7 @@
 
     let obstacles = [];
     let scrollX = 0;
+    let scrollXForDraw = 0; // when sinking, used to center view on character + hole
     let time = 0;
     let nextObstacleAt = 220;
     let nextMeteorAt = 350;
@@ -445,7 +449,7 @@
     }
 
     function drawMeteor(m) {
-      const sx = m.x - scrollX;
+      const sx = m.x - scrollXForDraw;
       if (sx + m.tailLen + m.r < -20 || sx - m.r > W + 20) return;
       const tailSegments = 8;
       for (let i = tailSegments; i >= 0; i--) {
@@ -468,7 +472,7 @@
     }
 
     function drawBlast(b) {
-      const sx = b.x - scrollX;
+      const sx = b.x - scrollXForDraw;
       if (sx < -100 || sx > W + 100) return;
       const isBig = b.big;
       const dur = isBig ? 0.7 : 0.5;
@@ -516,7 +520,7 @@
     }
 
     function drawJet(j) {
-      const sx = j.x - scrollX;
+      const sx = j.x - scrollXForDraw;
       if (sx + j.w < -60 || sx > W + 60) return;
       ctx.save();
       ctx.translate(sx + j.w / 2, j.y);
@@ -568,7 +572,7 @@
         { parallax: 0.6,  peaks: [0, 300, 600, 900, 1200],           heights: [200, 280, 240, 290, 210],             color: '#7cd87a' }
       ];
       layers.forEach(layer => {
-        const baseX = -(scrollX * layer.parallax) % 500;
+        const baseX = -(scrollXForDraw * layer.parallax) % 500;
         ctx.fillStyle = layer.color;
         ctx.beginPath();
         ctx.moveTo(-50, H + 20);
@@ -599,7 +603,7 @@
         ctx.beginPath();
         const baseY = groundY + 15 + Math.sin(time * 0.1 + i) * 5;
         for (let x = -20; x < W + 20; x += 15) {
-          const y = baseY + Math.sin((x + scrollX * 0.3) * 0.08) * 6;
+          const y = baseY + Math.sin((x + scrollXForDraw * 0.3) * 0.08) * 6;
           if (x === -20) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -680,7 +684,7 @@
     }
 
     function drawObstacle(ob) {
-      const x = ob.x - scrollX;
+      const x = ob.x - scrollXForDraw;
       if (x + ob.w < -20 || x > W + 20) return;
       const y = groundY + ob.yOffset;
 
@@ -989,12 +993,10 @@
         runner.legPhase += 0.25;
       }
 
-      // falling into hole: faster sink into the hole they touched
+      // falling into hole: sink and pull character to screen center (hole is drawn at center)
       if (runner.fallingInHole) {
         runner.y += 10 * (dt / 16);
-        // Pull character toward hole center so they sink into that hole
-        const holeScreenX = runner.fallHoleCenterWorldX - scrollX;
-        runner.x += (holeScreenX - runner.x) * 0.25;
+        runner.x += (W / 2 - runner.x) * 0.3;
       }
 
       // death: hit holes — fall in until fully submerged, then game over
@@ -1034,6 +1036,11 @@
     }
 
     function draw() {
+      // When sinking, put hole at screen center and pull character there too
+      scrollXForDraw = runner.fallingInHole
+        ? runner.fallHoleCenterWorldX - W / 2
+        : scrollX;
+
       drawSky();
       drawSun();
       drawMountains();
@@ -1041,7 +1048,7 @@
       // palm / coconut trees in background (parallax)
       const palmPositions = [100, 350, 600, 850, 1100, 1400];
       palmPositions.forEach((px, i) => {
-        const screenX = (px - scrollX * 0.3) % (W + 80) - 40;
+        const screenX = (px - scrollXForDraw * 0.3) % (W + 80) - 40;
         if (screenX > -60) drawPalm(screenX, 0.7, i % 2 === 0);
       });
 
@@ -1050,7 +1057,7 @@
 
       // palm / coconut trees in foreground
       [250, 500, 750, 1000].forEach((px, i) => {
-        const screenX = (px - scrollX * 0.6) % (W + 100) - 50;
+        const screenX = (px - scrollXForDraw * 0.6) % (W + 100) - 50;
         if (screenX > -80) drawPalm(screenX, 1, i % 2 === 1);
       });
 
@@ -1074,13 +1081,13 @@
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 40px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('You wiped out!', W / 2, H / 2 - 35);
-        ctx.font = '28px sans-serif';
-        ctx.fillText(`Score: ${score}`, W / 2, H / 2 + 5);
+        ctx.font = 'bold 40px sans-serif';
+        ctx.fillText('You wiped out!', W / 2, H / 2 - 50);
+        ctx.font = 'bold 56px sans-serif';
+        ctx.fillText(`Score: ${score}`, W / 2, H / 2 + 15);
         ctx.font = '18px sans-serif';
-        ctx.fillText('Press SPACE to run again.', W / 2, H / 2 + 40);
+        ctx.fillText('Press SPACE to run again.', W / 2, H / 2 + 55);
         ctx.textAlign = 'left';
       }
     }
