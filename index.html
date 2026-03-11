@@ -8,7 +8,14 @@
   <title>Hawaii Obstacle Course</title>
   <style>
     body { margin: 0; background: #1a5f7a; display: flex; justify-content: center; align-items: center; min-height: 100vh; position: relative; overflow: hidden; }
-    canvas { border: 2px solid #0d3d4d; border-radius: 8px; background: #87ceeb; display: block; }
+    canvas {
+      border: 2px solid #0d3d4d;
+      border-radius: 8px;
+      background: #87ceeb;
+      display: block;
+      width: min(100vw, calc(95vh * 480 / 800));
+      height: min(95vh, calc(100vw * 800 / 480));
+    }
 
     /* Mobile joystick controls */
     #joystickContainer {
@@ -58,9 +65,8 @@
       }
 
       canvas {
-        width: 100vw;
-        height: auto;
-        max-height: 75vh;
+        width: min(100vw, calc(75vh * 480 / 800));
+        height: min(75vh, calc(100vw * 800 / 480));
       }
 
       #joystickContainer {
